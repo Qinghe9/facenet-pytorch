@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人脸注册 - 人脸识别考勤系统</title>
+    <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.2/css/bootstrap.min.css}">
+    <link rel="stylesheet" th:href="@{/webjars/font-awesome/6.4.2/css/all.min.css}">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 30px 0;
+        }
+        .capture-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 700px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .video-container {
+            position: relative;
+            border-radius: 15px;
+            overflow: hidden;
+            background: #000;
+        }
+        #video {
+            width: 100%;
+            display: block;
+        }
+        #canvas {
+            display: none;
+        }
+        .face-frame {
+            position: absolute;
+            border: 3px dashed #00ff00;
+            border-radius: 10px;
+            pointer-events: none;
+        }
+        .capture-count {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        .thumbnails {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .thumb {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 2px solid #ddd;
+        }
+        .thumb.success {
+            border-color: #28a745;
+        }
+        .instruction {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="capture-card">
+            <div class="card-header bg-white text-center py-4">
+                <h4 class="mb-0"><i class="fas fa-user-plus me-2"></i>人脸注册</h4>
+                <p class="text-muted mb-0 mt-1">请采集3-5张不同角度的人脸照片</p>
+            </div>
+            <div class="card-body p-4">
+                <!-- 学生信息 -->
+                <div class="instruction">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 id="studentInfo">请输入学号或从学生列表选择</h5>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="studentCodeInput" placeholder="输入学号">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 摄像头区域 -->
+                <div class="video-container mb-4">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas"></canvas>
+                    <div class="face-frame" id="faceFrame"></div>
+                    <div class="capture-count">
+                        已采集: <span id="captureCount">0</span>/5
+                    </div>
+                </div>
+
+                <!-- 提示 -->
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>拍照要求:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>保持正面面对摄像头</li>
+                        <li>确保光线充足、面部清晰</li>
+                        <li>采集不同角度（左右转头、上下点头）</li>
+                        <li>请勿佩戴眼镜、帽子等遮挡物</li>
+                    </ul>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="d-flex gap-3 mb-4">
+                    <button class="btn btn-primary flex-grow-1" id="captureBtn" onclick="captureFace()" disabled>
+                        <i class="fas fa-camera me-2"></i>拍照采集
+                    </button>
+                    <button class="btn btn-success flex-grow-1" id="uploadBtn" onclick="uploadFaces()" disabled>
+                        <i class="fas fa-cloud-upload-alt me-2"></i>上传注册
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetCapture()">
+                        <i class="fas fa-redo me-2"></i>重置
+                    </button>
+                </div>
+
+                <!-- 缩略图预览 -->
+                <div class="mb-4">
+                    <label class="form-label">已采集照片预览:</label>
+                    <div class="thumbnails" id="thumbnails">
+                        <div class="text-muted">暂无照片</div>
+                    </div>
+                </div>
+
+                <!-- 注册结果 -->
+                <div id="resultAlert" class="alert" style="display:none;"></div>
+
+                <div class="text-center">
+                    <a href="/teacher/students" class="text-muted">
+                        <i class="fas fa-arrow-left me-1"></i>返回学生管理
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/webjars/jquery/3.7.1/jquery.min.js}"></script>
+    <script th:src="@{/webjars/bootstrap/5.3.2/js/bootstrap.bundle.min.js}"></script>
+    <script>
+        let videoStream;
+        let capturedFaces = [];
+        let currentStudentId = null;
+
+        $(document).ready(function() {
+            startCamera();
+
+            var params = new URLSearchParams(window.location.search);
+            var studentId = params.get('studentId');
+            var studentCode = params.get('studentCode');
+
+            if (studentCode) {
+                $('#studentCodeInput').val(studentCode);
+                lookupStudent(studentCode);
+            }
+
+            if (studentId) {
+                currentStudentId = studentId;
+                loadStudentInfo(studentId);
+            }
+
+            $('#studentCodeInput').change(function() {
+                var code = $(this).val();
+                if (code) {
+                    lookupStudent(code);
+                }
+            });
+        });
+
+        function lookupStudent(studentCode) {
+            $.get('/api/students/code/' + studentCode, function(data) {
+                if (data.code === 200) {
+                    currentStudentId = data.data.id;
+                    loadStudentInfo(data.data);
+                } else {
+                    alert('学号不存在');
+                }
+            });
+        }
+
+        function loadStudentInfo(student) {
+            $('#studentInfo').html('<i class="fas fa-user me-2"></i>' + student.name + ' (' + student.studentCode + ')');
+            $('#captureBtn').prop('disabled', false);
+
+            if (student.faceCount > 0) {
+                $('#resultAlert').show().addClass('alert-info').html(
+                    '<i class="fas fa-info-circle me-2"></i>该学生已有人脸数据，重新注册将覆盖原有数据（已有 ' + student.faceCount + ' 张）'
+                );
+            }
+        }
+
+        function startCamera() {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+                .then(function(stream) {
+                    videoStream = stream;
+                    document.getElementById('video').srcObject = stream;
+                })
+                .catch(function(err) {
+                    alert('无法访问摄像头: ' + err.message);
+                });
+        }
+
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        function captureFace() {
+            if (!currentStudentId) {
+                alert('请先输入正确的学号');
+                return;
+            }
+
+            if (capturedFaces.length >= 5) {
+                alert('最多采集5张照片');
+                return;
+            }
+
+            var video = document.getElementById('video');
+            var canvas = document.getElementById('canvas');
+            var context = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            var imageData = canvas.toDataURL('image/jpeg').split(',')[1];
+            capturedFaces.push(imageData);
+
+            updateThumbnails();
+            updateCount();
+
+            if (capturedFaces.length >= 3) {
+                $('#uploadBtn').prop('disabled', false);
+            }
+        }
+
+        function updateThumbnails() {
+            if (capturedFaces.length === 0) {
+                $('#thumbnails').html('<div class="text-muted">暂无照片</div>');
+                return;
+            }
+
+            var html = '';
+            capturedFaces.forEach(function(img, i) {
+                html += '<img src="data:image/jpeg;base64,' + img + '" class="thumb success" alt="照片' + (i+1) + '">';
+            });
+            $('#thumbnails').html(html);
+        }
+
+        function updateCount() {
+            $('#captureCount').text(capturedFaces.length);
+        }
+
+        function uploadFaces() {
+            if (!currentStudentId) {
+                alert('学生信息无效');
+                return;
+            }
+
+            if (capturedFaces.length < 3) {
+                alert('请至少采集3张照片');
+                return;
+            }
+
+            $('#uploadBtn').html('<i class="fas fa-spinner fa-spin me-2"></i>上传中...').prop('disabled', true);
+            $('#captureBtn').prop('disabled', true);
+
+            var uploaded = 0;
+            var failed = 0;
+
+            capturedFaces.forEach(function(imgData, index) {
+                $.ajax({
+                    url: '/api/face/register',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        studentId: currentStudentId,
+                        imageData: imgData
+                    }),
+                    success: function(data) {
+                        if (data.code === 200) {
+                            uploaded++;
+                        } else {
+                            failed++;
+                        }
+                        checkUploadComplete(uploaded, failed);
+                    },
+                    error: function() {
+                        failed++;
+                        checkUploadComplete(uploaded, failed);
+                    }
+                });
+            });
+        }
+
+        function checkUploadComplete(uploaded, failed) {
+            if (uploaded + failed === capturedFaces.length) {
+                var resultAlert = $('#resultAlert');
+                resultAlert.show();
+
+                if (failed === 0) {
+                    resultAlert.removeClass('alert-danger').addClass('alert-success');
+                    resultAlert.html('<i class="fas fa-check-circle me-2"></i><strong>注册成功！</strong> 已上传 ' + uploaded + ' 张照片');
+                    capturedFaces = [];
+                    updateThumbnails();
+                    updateCount();
+                } else {
+                    resultAlert.removeClass('alert-success').addClass('alert-danger');
+                    resultAlert.html('<i class="fas fa-times-circle me-2"></i><strong>部分失败</strong> 成功 ' + uploaded + ' 张，失败 ' + failed + ' 张');
+                }
+
+                $('#uploadBtn').html('<i class="fas fa-cloud-upload-alt me-2"></i>上传注册').prop('disabled', false);
+                $('#captureBtn').prop('disabled', false);
+            }
+        }
+
+        function resetCapture() {
+            capturedFaces = [];
+            updateThumbnails();
+            updateCount();
+            $('#resultAlert').hide();
+            $('#uploadBtn').prop('disabled', true);
+        }
+
+        window.onbeforeunload = function() {
+            stopCamera();
+        };
+    </script>
+</body>
+</html>

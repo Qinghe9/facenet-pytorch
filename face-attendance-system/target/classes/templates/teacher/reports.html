@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>考勤报表 - 人脸识别考勤系统</title>
+    <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.2/css/bootstrap.min.css}">
+    <link rel="stylesheet" th:href="@{/webjars/font-awesome/6.4.2/css/all.min.css}">
+    <style>
+        .sidebar { background: #2c3e50; min-height: 100vh; color: white; }
+        .sidebar .nav-link { color: rgba(255,255,255,0.8); padding: 15px 20px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background: rgba(255,255,255,0.1); color: white; }
+        .sidebar .nav-link i { margin-right: 10px; }
+        .content-area { background: #f8f9fa; min-height: 100vh; }
+        .stat-card { border-radius: 12px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        .chart-container { position: relative; height: 300px; }
+    </style>
+</head>
+<body>
+    <div class="d-flex">
+        <div class="sidebar" style="width: 240px;">
+            <div class="p-4 text-center border-bottom border-secondary">
+                <h5 class="mb-0"><i class="fas fa-chalkboard-teacher me-2"></i>教师端</h5>
+            </div>
+            <nav class="nav flex-column mt-3">
+                <a class="nav-link" href="/teacher/dashboard"><i class="fas fa-home"></i>工作台</a>
+                <a class="nav-link" href="/teacher/students"><i class="fas fa-user-graduate"></i>学生管理</a>
+                <a class="nav-link" href="/teacher/courses"><i class="fas fa-book"></i>课程管理</a>
+                <a class="nav-link" href="/teacher/attendance"><i class="fas fa-clipboard-check"></i>考勤管理</a>
+                <a class="nav-link active" href="/teacher/reports"><i class="fas fa-chart-bar"></i>考勤报表</a>
+                <a class="nav-link" href="/face/capture"><i class="fas fa-user-plus"></i>人脸注册</a>
+                <a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i>退出登录</a>
+            </nav>
+        </div>
+
+        <div class="content-area flex-grow-1">
+            <div class="bg-white p-3 shadow-sm d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">考勤报表</h4>
+                <button class="btn btn-primary" onclick="exportReport()">
+                    <i class="fas fa-download"></i> 导出报表
+                </button>
+            </div>
+
+            <div class="p-4">
+                <!-- 查询条件 -->
+                <div class="card stat-card mb-4">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">课程</label>
+                                <select class="form-select" id="reportCourse">
+                                    <option value="">选择课程</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">开始日期</label>
+                                <input type="date" class="form-control" id="reportStartDate">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">结束日期</label>
+                                <input type="date" class="form-control" id="reportEndDate">
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button class="btn btn-primary w-100" onclick="generateReport()">
+                                    <i class="fas fa-chart-pie"></i> 生成报表
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 统计概览 -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card stat-card text-center">
+                            <div class="card-body">
+                                <h2 class="text-primary mb-0" id="totalStudents">0</h2>
+                                <small class="text-muted">应到人数</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card text-center">
+                            <div class="card-body">
+                                <h2 class="text-success mb-0" id="totalChecked">0</h2>
+                                <small class="text-muted">实到人数</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card text-center">
+                            <div class="card-body">
+                                <h2 class="text-warning mb-0" id="totalLate">0</h2>
+                                <small class="text-muted">迟到人数</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card text-center">
+                            <div class="card-body">
+                                <h2 class="text-danger mb-0" id="totalAbsent">0</h2>
+                                <small class="text-muted">缺勤人数</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 出勤率 -->
+                <div class="card stat-card mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-percentage me-2"></i>出勤率</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-4 text-center">
+                                <h1 class="display-1 text-success" id="attendanceRate">0%</h1>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="progress" style="height: 30px;">
+                                    <div class="progress-bar bg-success" id="rateBar" style="width: 0%"></div>
+                                </div>
+                                <div class="d-flex justify-content-between mt-2">
+                                    <span>0%</span>
+                                    <span>50%</span>
+                                    <span>100%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 学生考勤明细 -->
+                <div class="card stat-card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-list me-2"></i>学生考勤明细</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>学号</th>
+                                        <th>姓名</th>
+                                        <th>出勤次数</th>
+                                        <th>迟到次数</th>
+                                        <th>缺勤次数</th>
+                                        <th>出勤率</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="studentDetailsTable">
+                                    <tr><td colspan="6" class="text-center text-muted">请选择课程和日期范围生成报表</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/webjars/jquery/3.7.1/jquery.min.js}"></script>
+    <script th:src="@{/webjars/bootstrap/5.3.2/js/bootstrap.bundle.min.js}"></script>
+    <script>
+        $(document).ready(function() {
+            loadCourses();
+
+            var today = new Date();
+            var monthAgo = new Date(today);
+            monthAgo.setMonth(monthAgo.getMonth() - 1);
+
+            $('#reportStartDate').val(monthAgo.toISOString().split('T')[0]);
+            $('#reportEndDate').val(today.toISOString().split('T')[0]);
+        });
+
+        function loadCourses() {
+            $.get('/api/courses', function(data) {
+                if (data.code === 200) {
+                    var options = '<option value="">选择课程</option>';
+                    data.data.forEach(function(c) {
+                        options += '<option value="' + c.id + '">' + c.courseName + '</option>';
+                    });
+                    $('#reportCourse').html(options);
+                }
+            });
+        }
+
+        function generateReport() {
+            var courseId = $('#reportCourse').val();
+            var startDate = $('#reportStartDate').val();
+            var endDate = $('#reportEndDate').val();
+
+            if (!courseId) {
+                alert('请选择课程');
+                return;
+            }
+
+            $.get('/api/attendance/records?courseId=' + courseId + '&startDate=' + startDate + '&endDate=' + endDate,
+                function(data) {
+                    if (data.code === 200) {
+                        processReportData(data.data);
+                    }
+                });
+        }
+
+        function processReportData(records) {
+            var studentStats = {};
+
+            records.forEach(function(r) {
+                var sid = r.studentId;
+                if (!studentStats[sid]) {
+                    studentStats[sid] = {
+                        studentCode: r.studentCode,
+                        studentName: r.studentName,
+                        normal: 0,
+                        late: 0,
+                        absent: 0,
+                        total: 0
+                    };
+                }
+                if (r.status === 'normal') studentStats[sid].normal++;
+                else if (r.status === 'late') studentStats[sid].late++;
+                else if (r.status === 'absent') studentStats[sid].absent++;
+                studentStats[sid].total++;
+            });
+
+            var totalStudents = Object.keys(studentStats).length;
+            var totalNormal = 0, totalLate = 0, totalAbsent = 0;
+
+            Object.values(studentStats).forEach(function(s) {
+                totalNormal += s.normal;
+                totalLate += s.late;
+                totalAbsent += s.absent;
+            });
+
+            var totalChecked = totalNormal + totalLate;
+            var attendanceRate = totalStudents > 0 ? (totalChecked / (totalChecked + totalAbsent) * 100) : 0;
+
+            $('#totalStudents').text(totalStudents);
+            $('#totalChecked').text(totalChecked);
+            $('#totalLate').text(totalLate);
+            $('#totalAbsent').text(totalAbsent);
+            $('#attendanceRate').text(attendanceRate.toFixed(1) + '%');
+            $('#rateBar').css('width', attendanceRate + '%');
+
+            var html = '';
+            Object.values(studentStats).forEach(function(s) {
+                var rate = s.total > 0 ? ((s.normal + s.late) / s.total * 100) : 0;
+                html += '<tr>' +
+                    '<td>' + s.studentCode + '</td>' +
+                    '<td>' + s.studentName + '</td>' +
+                    '<td>' + s.normal + '</td>' +
+                    '<td>' + s.late + '</td>' +
+                    '<td>' + s.absent + '</td>' +
+                    '<td><span class="text-' + (rate >= 90 ? 'success' : rate >= 70 ? 'warning' : 'danger') + '">' + rate.toFixed(1) + '%</span></td>' +
+                    '</tr>';
+            });
+
+            if (html) {
+                $('#studentDetailsTable').html(html);
+            } else {
+                $('#studentDetailsTable').html('<tr><td colspan="6" class="text-center text-muted">暂无数据</td></tr>');
+            }
+        }
+
+        function exportReport() {
+            var courseId = $('#reportCourse').val();
+            var startDate = $('#reportStartDate').val();
+            var endDate = $('#reportEndDate').val();
+
+            if (!courseId) {
+                alert('请选择课程');
+                return;
+            }
+
+            window.location.href = '/api/attendance/export?courseId=' + courseId +
+                '&startDate=' + startDate + '&endDate=' + endDate;
+        }
+    </script>
+</body>
+</html>

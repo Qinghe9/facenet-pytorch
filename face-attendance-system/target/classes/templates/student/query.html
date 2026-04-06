@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>考勤查询 - 人脸识别考勤系统</title>
+    <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.2/css/bootstrap.min.css}">
+    <link rel="stylesheet" th:href="@{/webjars/font-awesome/6.4.2/css/all.min.css}">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .query-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            margin: 50px auto;
+        }
+        .stat-box {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-box .number {
+            font-size: 36px;
+            font-weight: bold;
+        }
+        .stat-box .label {
+            color: #666;
+            font-size: 14px;
+        }
+        .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 14px; }
+        .status-normal { background: #d4edda; color: #155724; }
+        .status-late { background: #fff3cd; color: #856404; }
+        .status-absent { background: #f8d7da; color: #721c24; }
+        .status-leave { background: #cce5ff; color: #004085; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="query-card">
+            <div class="card-header bg-white text-center py-4">
+                <h4 class="mb-0"><i class="fas fa-search me-2"></i>考勤记录查询</h4>
+            </div>
+            <div class="card-body p-4">
+                <!-- 学生信息 -->
+                <div class="text-center mb-4">
+                    <img src="https://via.placeholder.com/80" class="rounded-circle mb-2" id="avatar" alt="头像">
+                    <h5 id="studentName">学生姓名</h5>
+                    <p class="text-muted mb-0" id="studentCode">学号</p>
+                </div>
+
+                <!-- 统计卡片 -->
+                <div class="row g-3 mb-4">
+                    <div class="col-4">
+                        <div class="stat-box">
+                            <div class="number text-success" id="statNormal">0</div>
+                            <div class="label">正常</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="stat-box">
+                            <div class="number text-warning" id="statLate">0</div>
+                            <div class="label">迟到</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="stat-box">
+                            <div class="number text-danger" id="statAbsent">0</div>
+                            <div class="label">缺勤</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 查询条件 -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label">开始日期</label>
+                        <input type="date" class="form-control" id="startDate">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">结束日期</label>
+                        <input type="date" class="form-control" id="endDate">
+                    </div>
+                </div>
+                <button class="btn btn-primary w-100 mb-4" onclick="queryAttendance()">
+                    <i class="fas fa-search me-2"></i>查询
+                </button>
+
+                <!-- 考勤记录列表 -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>日期</th>
+                                <th>课程</th>
+                                <th>时间</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendanceList">
+                            <tr><td colspan="4" class="text-center text-muted">请查询考勤记录</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="text-center mt-4">
+                    <a href="/student/checkin" class="btn btn-outline-primary me-2">
+                        <i class="fas fa-camera me-1"></i>去签到
+                    </a>
+                    <a href="/login" class="text-muted"><i class="fas fa-sign-out-alt me-1"></i>退出</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/webjars/jquery/3.7.1/jquery.min.js}"></script>
+    <script th:src="@{/webjars/bootstrap/5.3.2/js/bootstrap.bundle.min.js}"></script>
+    <script>
+        $(document).ready(function() {
+            var today = new Date();
+            var monthAgo = new Date(today);
+            monthAgo.setMonth(monthAgo.getMonth() - 1);
+
+            $('#startDate').val(monthAgo.toISOString().split('T')[0]);
+            $('#endDate').val(today.toISOString().split('T')[0]);
+
+            var params = new URLSearchParams(window.location.search);
+            var studentCode = params.get('studentCode');
+            if (studentCode) {
+                loadStudentInfo(studentCode);
+            }
+        });
+
+        function loadStudentInfo(studentCode) {
+            $.get('/api/students/code/' + studentCode, function(data) {
+                if (data.code === 200) {
+                    $('#studentName').text(data.data.name);
+                    $('#studentCode').text(data.data.studentCode);
+                }
+            });
+        }
+
+        function queryAttendance() {
+            var studentCode = $('#studentCode').text();
+            if (!studentCode || studentCode === '学号') {
+                alert('请先登录');
+                return;
+            }
+
+            var startDate = $('#startDate').val();
+            var endDate = $('#endDate').val();
+
+            $.get('/api/students/code/' + studentCode, function(data) {
+                if (data.code === 200) {
+                    var studentId = data.data.id;
+
+                    $.get('/api/attendance/records?studentId=' + studentId +
+                        '&startDate=' + startDate + '&endDate=' + endDate,
+                        function(data) {
+                            if (data.code === 200) {
+                                renderAttendance(data.data);
+                            }
+                        });
+                }
+            });
+        }
+
+        function renderAttendance(records) {
+            var normal = 0, late = 0, absent = 0;
+            var statusMap = {normal: '正常', late: '迟到', absent: '缺勤', leave: '请假'};
+            var statusClass = {normal: 'status-normal', late: 'status-late', absent: 'status-absent', leave: 'status-leave'};
+
+            if (!records || records.length === 0) {
+                $('#attendanceList').html('<tr><td colspan="4" class="text-center text-muted">暂无数据</td></tr>');
+                return;
+            }
+
+            records.forEach(function(r) {
+                if (r.status === 'normal') normal++;
+                else if (r.status === 'late') late++;
+                else if (r.status === 'absent') absent++;
+            });
+
+            $('#statNormal').text(normal);
+            $('#statLate').text(late);
+            $('#statAbsent').text(absent);
+
+            var html = '';
+            records.forEach(function(r) {
+                var date = r.checkInTime ? r.checkInTime.split('T')[0] : '-';
+                var time = r.checkInTime ? r.checkInTime.split('T')[1].substring(0, 5) : '-';
+                html += '<tr>' +
+                    '<td>' + date + '</td>' +
+                    '<td>' + (r.courseName || '-') + '</td>' +
+                    '<td>' + time + '</td>' +
+                    '<td><span class="status-badge ' + (statusClass[r.status] || '') + '">' + (statusMap[r.status] || r.status) + '</span></td>' +
+                    '</tr>';
+            });
+
+            $('#attendanceList').html(html);
+        }
+    </script>
+</body>
+</html>

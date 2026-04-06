@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>考勤管理 - 人脸识别考勤系统</title>
+    <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.2/css/bootstrap.min.css}">
+    <link rel="stylesheet" th:href="@{/webjars/font-awesome/6.4.2/css/all.min.css}">
+    <style>
+        .sidebar { background: #2c3e50; min-height: 100vh; color: white; }
+        .sidebar .nav-link { color: rgba(255,255,255,0.8); padding: 15px 20px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background: rgba(255,255,255,0.1); color: white; }
+        .sidebar .nav-link i { margin-right: 10px; }
+        .content-area { background: #f8f9fa; min-height: 100vh; }
+        .stat-card { border-radius: 12px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; }
+        .status-normal { background: #d4edda; color: #155724; }
+        .status-late { background: #fff3cd; color: #856404; }
+        .status-absent { background: #f8d7da; color: #721c24; }
+        .status-leave { background: #cce5ff; color: #004085; }
+    </style>
+</head>
+<body>
+    <div class="d-flex">
+        <div class="sidebar" style="width: 240px;">
+            <div class="p-4 text-center border-bottom border-secondary">
+                <h5 class="mb-0"><i class="fas fa-chalkboard-teacher me-2"></i>教师端</h5>
+            </div>
+            <nav class="nav flex-column mt-3">
+                <a class="nav-link" href="/teacher/dashboard"><i class="fas fa-home"></i>工作台</a>
+                <a class="nav-link" href="/teacher/students"><i class="fas fa-user-graduate"></i>学生管理</a>
+                <a class="nav-link" href="/teacher/courses"><i class="fas fa-book"></i>课程管理</a>
+                <a class="nav-link active" href="/teacher/attendance"><i class="fas fa-clipboard-check"></i>考勤管理</a>
+                <a class="nav-link" href="/teacher/reports"><i class="fas fa-chart-bar"></i>考勤报表</a>
+                <a class="nav-link" href="/face/capture"><i class="fas fa-user-plus"></i>人脸注册</a>
+                <a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i>退出登录</a>
+            </nav>
+        </div>
+
+        <div class="content-area flex-grow-1">
+            <div class="bg-white p-3 shadow-sm d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">考勤管理</h4>
+                <div>
+                    <button class="btn btn-success" onclick="startCameraCheckin()">
+                        <i class="fas fa-camera"></i> 摄像头签到
+                    </button>
+                    <button class="btn btn-primary" onclick="exportAttendance()">
+                        <i class="fas fa-download"></i> 导出Excel
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4">
+                <!-- 搜索栏 -->
+                <div class="card stat-card mb-4">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">课程</label>
+                                <select class="form-select" id="searchCourse">
+                                    <option value="">选择课程</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">开始日期</label>
+                                <input type="date" class="form-control" id="startDate">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">结束日期</label>
+                                <input type="date" class="form-control" id="endDate">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">状态</label>
+                                <select class="form-select" id="searchStatus">
+                                    <option value="">全部</option>
+                                    <option value="normal">正常</option>
+                                    <option value="late">迟到</option>
+                                    <option value="absent">缺勤</option>
+                                    <option value="leave">请假</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button class="btn btn-primary" onclick="searchAttendance()">
+                                <i class="fas fa-search"></i> 查询
+                            </button>
+                            <button class="btn btn-secondary" onclick="resetSearch()">
+                                <i class="fas fa-redo"></i> 重置
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 考勤统计 -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card stat-card text-center">
+                            <div class="card-body">
+                                <h3 class="text-success mb-0" id="statNormal">0</h3>
+                                <small class="text-muted">正常</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card text-center">
+                            <div class="card-body">
+                                <h3 class="text-warning mb-0" id="statLate">0</h3>
+                                <small class="text-muted">迟到</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card text-center">
+                            <div class="card-body">
+                                <h3 class="text-danger mb-0" id="statAbsent">0</h3>
+                                <small class="text-muted">缺勤</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card text-center">
+                            <div class="card-body">
+                                <h3 class="text-primary mb-0" id="statLeave">0</h3>
+                                <small class="text-muted">请假</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 考勤列表 -->
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>学号</th>
+                                        <th>姓名</th>
+                                        <th>课程</th>
+                                        <th>签到时间</th>
+                                        <th>签到方式</th>
+                                        <th>状态</th>
+                                        <th>置信度</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attendanceTable">
+                                    <tr><td colspan="8" class="text-center text-muted">请查询考勤记录</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 摄像头签到 Modal -->
+    <div class="modal fade" id="cameraModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">摄像头签到</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <video id="video" width="100%" autoplay style="border-radius: 8px;"></video>
+                            <canvas id="canvas" style="display:none;"></canvas>
+                            <div class="text-center mt-3">
+                                <button class="btn btn-primary" id="captureBtn" onclick="captureFace()">
+                                    <i class="fas fa-camera"></i> 拍照签到
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">选择课程</label>
+                                <select class="form-select" id="checkinCourse"></select>
+                            </div>
+                            <div id="checkinResult" class="alert" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/webjars/jquery/3.7.1/jquery.min.js}"></script>
+    <script th:src="@{/webjars/bootstrap/5.3.2/js/bootstrap.bundle.min.js}"></script>
+    <script>
+        let cameraModal;
+        let videoStream;
+        let currentCaptureImage;
+
+        $(document).ready(function() {
+            cameraModal = new bootstrap.Modal(document.getElementById('cameraModal'));
+            loadCourses();
+
+            $('#startDate').val(new Date().toISOString().split('T')[0]);
+            $('#endDate').val(new Date().toISOString().split('T')[0]);
+
+            $('#cameraModal').on('hidden.bs.modal', function() {
+                stopCamera();
+            });
+        });
+
+        function loadCourses() {
+            $.get('/api/courses', function(data) {
+                if (data.code === 200) {
+                    var options = '<option value="">选择课程</option>';
+                    data.data.forEach(function(c) {
+                        options += '<option value="' + c.id + '">' + c.courseName + '</option>';
+                    });
+                    $('#searchCourse, #checkinCourse').html(options);
+                }
+            });
+        }
+
+        function searchAttendance() {
+            var courseId = $('#searchCourse').val();
+            var startDate = $('#startDate').val();
+            var endDate = $('#endDate').val();
+            var status = $('#searchStatus').val();
+
+            var url = '/api/attendance/records?';
+            if (courseId) url += 'courseId=' + courseId + '&';
+            if (startDate) url += 'startDate=' + startDate + '&';
+            if (endDate) url += 'endDate=' + endDate + '&';
+            if (status) url += 'status=' + status;
+
+            $.get(url, function(data) {
+                if (data.code === 200) {
+                    renderAttendance(data.data);
+                }
+            });
+        }
+
+        function renderAttendance(records) {
+            var normal = 0, late = 0, absent = 0, leave = 0;
+
+            if (!records || records.length === 0) {
+                $('#attendanceTable').html('<tr><td colspan="8" class="text-center text-muted">暂无数据</td></tr>');
+                return;
+            }
+
+            records.forEach(function(r) {
+                if (r.status === 'normal') normal++;
+                else if (r.status === 'late') late++;
+                else if (r.status === 'absent') absent++;
+                else if (r.status === 'leave') leave++;
+            });
+
+            $('#statNormal').text(normal);
+            $('#statLate').text(late);
+            $('#statAbsent').text(absent);
+            $('#statLeave').text(leave);
+
+            var statusMap = {normal: '正常', late: '迟到', absent: '缺勤', leave: '请假'};
+            var statusClass = {normal: 'status-normal', late: 'status-late', absent: 'status-absent', leave: 'status-leave'};
+
+            var html = '';
+            records.forEach(function(r) {
+                var time = r.checkInTime ? r.checkInTime.replace('T', ' ').substring(0, 19) : '-';
+                html += '<tr>' +
+                    '<td>' + (r.studentCode || '-') + '</td>' +
+                    '<td>' + (r.studentName || '-') + '</td>' +
+                    '<td>' + (r.courseName || '-') + '</td>' +
+                    '<td>' + time + '</td>' +
+                    '<td>' + (r.checkInType === 'camera' ? '摄像头' : '手动') + '</td>' +
+                    '<td><span class="status-badge ' + (statusClass[r.status] || '') + '">' + (statusMap[r.status] || r.status) + '</span></td>' +
+                    '<td>' + (r.confidence ? (r.confidence * 100).toFixed(1) + '%' : '-') + '</td>' +
+                    '<td>' +
+                    '<button class="btn btn-sm btn-warning me-1" onclick="editAttendance(' + r.id + ', \'' + r.status + '\')"><i class="fas fa-edit"></i></button>' +
+                    '<button class="btn btn-sm btn-danger" onclick="deleteAttendance(' + r.id + ')"><i class="fas fa-trash"></i></button>' +
+                    '</td></tr>';
+            });
+            $('#attendanceTable').html(html);
+        }
+
+        function resetSearch() {
+            $('#searchCourse').val('');
+            $('#searchStatus').val('');
+            $('#startDate').val(new Date().toISOString().split('T')[0]);
+            $('#endDate').val(new Date().toISOString().split('T')[0]);
+        }
+
+        function startCameraCheckin() {
+            $('#checkinResult').hide();
+            loadCourses();
+            cameraModal.show();
+            startCamera();
+        }
+
+        function startCamera() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(stream) {
+                    videoStream = stream;
+                    document.getElementById('video').srcObject = stream;
+                })
+                .catch(function(err) {
+                    alert('无法访问摄像头: ' + err.message);
+                });
+        }
+
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        function captureFace() {
+            var video = document.getElementById('video');
+            var canvas = document.getElementById('canvas');
+            var context = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0);
+
+            var imageData = canvas.toDataURL('image/jpeg').split(',')[1];
+            currentCaptureImage = imageData;
+
+            var courseId = $('#checkinCourse').val();
+            if (!courseId) {
+                alert('请选择课程');
+                return;
+            }
+
+            $.ajax({
+                url: '/api/attendance/checkin',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    courseId: courseId,
+                    imageData: imageData,
+                    checkInType: 'camera'
+                }),
+                success: function(data) {
+                    var resultDiv = $('#checkinResult');
+                    resultDiv.show();
+
+                    if (data.code === 200 && data.data.success) {
+                        resultDiv.removeClass('alert-danger').addClass('alert-success');
+                        resultDiv.html('<strong>签到成功！</strong><br>' +
+                            '学生: ' + data.data.studentName + '<br>' +
+                            '学号: ' + data.data.studentCode + '<br>' +
+                            '状态: ' + data.data.status + '<br>' +
+                            '时间: ' + data.data.checkInTime);
+                    } else {
+                        resultDiv.removeClass('alert-success').addClass('alert-danger');
+                        resultDiv.html('<strong>签到失败</strong><br>' + (data.message || data.data.message));
+                    }
+                }
+            });
+        }
+
+        function editAttendance(id, currentStatus) {
+            var newStatus = prompt('修改考勤状态:\n1-正常\n2-迟到\n3-缺勤\n4-请假', getStatusIndex(currentStatus));
+            if (!newStatus) return;
+
+            var statusMap = {1: 'normal', 2: 'late', 3: 'absent', 4: 'leave'};
+            var status = statusMap[newStatus];
+
+            $.ajax({
+                url: '/api/attendance/records/' + id + '?status=' + status,
+                type: 'PUT',
+                success: function(data) {
+                    if (data.code === 200) {
+                        searchAttendance();
+                        alert('更新成功');
+                    } else {
+                        alert(data.message || '更新失败');
+                    }
+                }
+            });
+        }
+
+        function getStatusIndex(status) {
+            var map = {normal: 1, late: 2, absent: 3, leave: 4};
+            return map[status] || 1;
+        }
+
+        function deleteAttendance(id) {
+            if (!confirm('确定要删除该考勤记录吗？')) return;
+            $.ajax({
+                url: '/api/attendance/records/' + id,
+                type: 'DELETE',
+                success: function(data) {
+                    if (data.code === 200) {
+                        searchAttendance();
+                        alert('删除成功');
+                    } else {
+                        alert(data.message || '删除失败');
+                    }
+                }
+            });
+        }
+
+        function exportAttendance() {
+            var courseId = $('#searchCourse').val();
+            var startDate = $('#startDate').val();
+            var endDate = $('#endDate').val();
+
+            if (!courseId) {
+                alert('请选择课程');
+                return;
+            }
+
+            window.location.href = '/api/attendance/export?courseId=' + courseId +
+                '&startDate=' + startDate + '&endDate=' + endDate;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /face
+
+spring:
+  application:
+    name: face-attendance-system
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/face_attendance?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.face.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# ONNX Model Configuration
+face:
+  model:
+    # ONNX模型路径
+    detmodel-path: src/main/resources/model/face_detection_yunet.onnx
+    recmodel-path: src/main/resources/model/face_recognition.onnx
+    # 特征向量维度
+    embedding-size: 512
+    # 相似度阈值
+    similarity-threshold: 0.6
+    # 最小人脸尺寸
+    min-face-size: 40
+    # 输入图像大小
+    input-size: 160
+
+# 文件上传配置
+upload:
+  face-image-dir: src/main/resources/faces/
+  max-image-size: 5242880
+
+# 考勤配置
+attendance:
+  # 迟到时间阈值(分钟)，超过视为迟到
+  late-threshold-minutes: 15
+  # 早退时间阈值(分钟)，提前离开视为早退
+  early-leave-threshold-minutes: 30

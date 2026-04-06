@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(java -verbose)",
+      "Read(//e/jdk/dk-26/bin/**)",
+      "Bash(export JAVA_HOME=\"/e/jdk/dk-26\")",
+      "Bash(export PATH=\"$JAVA_HOME/bin:$PATH\")",
+      "Bash(java -version)",
+      "Bash(\"d:/Qinghe/opencv-face/facenet-pytorch/face-attendance-system/apache-maven/apache-maven-3.9.6/bin/mvn.cmd\" clean:*)",
+      "Bash(cmd /c \"cd /d D:\\\\Qinghe\\\\opencv-face\\\\facenet-pytorch\\\\face-attendance-system && set JAVA_HOME=E:\\\\jdk\\\\dk-26 && D:\\\\Qinghe\\\\opencv-face\\\\facenet-pytorch\\\\face-attendance-system\\\\apache-maven\\\\apache-maven-3.9.6\\\\bin\\\\mvn.cmd clean compile -DskipTests\")",
+      "Bash(cmd /c \"D:\\\\Qinghe\\\\opencv-face\\\\facenet-pytorch\\\\face-attendance-system\\\\build.bat\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\Qinghe\\\\opencv-face\\\\facenet-pytorch\\\\face-attendance-system\\\\build.ps1\")"
+    ]
+  }
+}

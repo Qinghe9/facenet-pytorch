@@ -7,9 +7,9 @@ if __name__ == "__main__":
     #---------------------#
     #   训练集所在的路径
     #---------------------#
-    datasets_path   = ""
+    datasets_path   = "datasets"
 
-    list_file = open('model_data\lfw_pair.txt', 'w', encoding='utf-8')
+    list_file = open('cls_val.txt', 'w', encoding='utf-8')
     cls_id = 0
     
     # 遍历第一层文件夹 (如: face_dataset_23人工智能1班)
@@ -25,7 +25,7 @@ if __name__ == "__main__":
                 continue
             
             # 遍历 train 文件夹
-            train_path = os.path.join(dir2_path, "test")
+            train_path = os.path.join(dir2_path, "val")
             if os.path.isdir(train_path):
                 # 遍历每个人物文件夹 (如: 10_张创)
                 for person_name in sorted(os.listdir(train_path)):

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生签到 - 人脸识别考勤系统</title>
+    <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.2/css/bootstrap.min.css}">
+    <link rel="stylesheet" th:href="@{/webjars/font-awesome/6.4.2/css/all.min.css}">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .checkin-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 100%;
+            margin: 50px auto;
+        }
+        .video-container {
+            position: relative;
+            border-radius: 15px;
+            overflow: hidden;
+            background: #000;
+        }
+        #video {
+            width: 100%;
+            display: block;
+        }
+        #canvas {
+            display: none;
+        }
+        .result-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.7);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .result-overlay.show {
+            opacity: 1;
+        }
+        .result-icon {
+            font-size: 80px;
+        }
+        .course-select {
+            border-radius: 10px;
+            padding: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="checkin-card">
+            <div class="card-header bg-white text-center py-4">
+                <h4 class="mb-0"><i class="fas fa-user-check me-2"></i>学生人脸签到</h4>
+                <p class="text-muted mb-0 mt-1">请正对摄像头，确保光线充足</p>
+            </div>
+            <div class="card-body p-4">
+                <div class="mb-4">
+                    <label class="form-label">选择签到课程</label>
+                    <select class="form-select course-select" id="courseSelect">
+                        <option value="">加载中...</option>
+                    </select>
+                </div>
+
+                <div class="video-container mb-4">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas"></canvas>
+                    <div class="result-overlay" id="resultOverlay">
+                        <div class="text-center text-white">
+                            <div class="result-icon" id="resultIcon"></div>
+                            <h3 class="mt-3" id="resultText"></h3>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-lg w-100" id="checkinBtn" onclick="captureAndCheckin()" disabled>
+                    <i class="fas fa-camera me-2"></i>拍照签到
+                </button>
+
+                <div class="text-center mt-4">
+                    <a href="/login" class="text-muted"><i class="fas fa-arrow-left me-1"></i>返回登录</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/webjars/jquery/3.7.1/jquery.min.js}"></script>
+    <script th:src="@{/webjars/bootstrap/5.3.2/js/bootstrap.bundle.min.js}"></script>
+    <script>
+        let videoStream;
+        let selectedCourseId;
+
+        $(document).ready(function() {
+            loadTodayCourses();
+            startCamera();
+
+            $('#courseSelect').change(function() {
+                selectedCourseId = $(this).val();
+                $('#checkinBtn').prop('disabled', !selectedCourseId);
+            });
+        });
+
+        function loadTodayCourses() {
+            $.get('/api/courses', function(data) {
+                if (data.code === 200 && data.data.length > 0) {
+                    var options = '<option value="">选择课程</option>';
+                    data.data.forEach(function(c) {
+                        options += '<option value="' + c.id + '">' + c.courseName + ' ' + (c.startTime || '') + '</option>';
+                    });
+                    $('#courseSelect').html(options);
+                } else {
+                    $('#courseSelect').html('<option value="">暂无进行中的课程</option>');
+                }
+            });
+        }
+
+        function startCamera() {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+                .then(function(stream) {
+                    videoStream = stream;
+                    document.getElementById('video').srcObject = stream;
+                })
+                .catch(function(err) {
+                    alert('无法访问摄像头: ' + err.message);
+                    console.error(err);
+                });
+        }
+
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        function captureAndCheckin() {
+            if (!selectedCourseId) {
+                alert('请先选择签到课程');
+                return;
+            }
+
+            var video = document.getElementById('video');
+            var canvas = document.getElementById('canvas');
+            var context = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            var imageData = canvas.toDataURL('image/jpeg').split(',')[1];
+
+            $('#checkinBtn').html('<i class="fas fa-spinner fa-spin me-2"></i>识别中...').prop('disabled', true);
+
+            $.ajax({
+                url: '/api/attendance/checkin',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    courseId: selectedCourseId,
+                    imageData: imageData,
+                    checkInType: 'camera'
+                }),
+                success: function(data) {
+                    showResult(data);
+                },
+                error: function() {
+                    showResult({code: 500, message: '网络错误'});
+                }
+            });
+        }
+
+        function showResult(data) {
+            var overlay = $('#resultOverlay');
+            var icon = $('#resultIcon');
+            var text = $('#resultText');
+
+            if (data.code === 200 && data.data && data.data.success) {
+                var d = data.data;
+                overlay.addClass('show');
+                icon.html('<i class="fas fa-check-circle text-success"></i>');
+                text.html('<strong>' + d.studentName + '</strong><br>签到' + (d.status === 'late' ? '(迟到)' : '成功'));
+                text.removeClass('text-white').addClass('text-success');
+
+                setTimeout(function() {
+                    overlay.removeClass('show');
+                }, 3000);
+            } else {
+                overlay.addClass('show');
+                icon.html('<i class="fas fa-times-circle text-danger"></i>');
+                text.html('<strong>签到失败</strong><br>' + (data.message || data.data?.message || '未知错误'));
+                text.removeClass('text-white').addClass('text-danger');
+
+                setTimeout(function() {
+                    overlay.removeClass('show');
+                }, 3000);
+            }
+
+            $('#checkinBtn').html('<i class="fas fa-camera me-2"></i>拍照签到').prop('disabled', false);
+        }
+
+        window.onbeforeunload = function() {
+            stopCamera();
+        };
+    </script>
+</body>
+</html>

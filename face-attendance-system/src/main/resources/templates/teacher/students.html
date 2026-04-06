@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生管理 - 人脸识别考勤系统</title>
+    <link rel="stylesheet" th:href="@{/webjars/bootstrap/5.3.2/css/bootstrap.min.css}">
+    <link rel="stylesheet" th:href="@{/webjars/font-awesome/6.4.2/css/all.min.css}">
+    <style>
+        .sidebar { background: #2c3e50; min-height: 100vh; color: white; }
+        .sidebar .nav-link { color: rgba(255,255,255,0.8); padding: 15px 20px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background: rgba(255,255,255,0.1); color: white; }
+        .sidebar .nav-link i { margin-right: 10px; }
+        .content-area { background: #f8f9fa; min-height: 100vh; }
+        .stat-card { border-radius: 12px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        .face-badge { background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+        .face-badge.none { background: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="d-flex">
+        <div class="sidebar" style="width: 240px;">
+            <div class="p-4 text-center border-bottom border-secondary">
+                <h5 class="mb-0"><i class="fas fa-chalkboard-teacher me-2"></i>教师端</h5>
+            </div>
+            <nav class="nav flex-column mt-3">
+                <a class="nav-link" href="/teacher/dashboard"><i class="fas fa-home"></i>工作台</a>
+                <a class="nav-link active" href="/teacher/students"><i class="fas fa-user-graduate"></i>学生管理</a>
+                <a class="nav-link" href="/teacher/courses"><i class="fas fa-book"></i>课程管理</a>
+                <a class="nav-link" href="/teacher/attendance"><i class="fas fa-clipboard-check"></i>考勤管理</a>
+                <a class="nav-link" href="/teacher/reports"><i class="fas fa-chart-bar"></i>考勤报表</a>
+                <a class="nav-link" href="/face/capture"><i class="fas fa-user-plus"></i>人脸注册</a>
+                <a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i>退出登录</a>
+            </nav>
+        </div>
+
+        <div class="content-area flex-grow-1">
+            <div class="bg-white p-3 shadow-sm d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">学生管理</h4>
+            </div>
+
+            <div class="p-4">
+                <!-- 搜索和操作栏 -->
+                <div class="card stat-card mb-4">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <input type="text" class="form-control" id="searchName" placeholder="搜索姓名">
+                            </div>
+                            <div class="col-md-3">
+                                <input type="text" class="form-control" id="searchCode" placeholder="搜索学号">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="searchClass">
+                                    <option value="">选择班级</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-primary me-2" onclick="searchStudents()">
+                                    <i class="fas fa-search"></i> 搜索
+                                </button>
+                                <button class="btn btn-success" onclick="showAddModal()">
+                                    <i class="fas fa-plus"></i> 新增
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 学生列表 -->
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>学号</th>
+                                        <th>姓名</th>
+                                        <th>班级</th>
+                                        <th>电话</th>
+                                        <th>邮箱</th>
+                                        <th>人脸状态</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="studentsTable">
+                                    <tr><td colspan="7" class="text-center text-muted">加载中...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增/编辑学生 Modal -->
+    <div class="modal fade" id="studentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">新增学生</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="studentForm">
+                        <input type="hidden" id="studentId">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">学号 *</label>
+                                <input type="text" class="form-control" id="studentCode" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">姓名 *</label>
+                                <input type="text" class="form-control" id="name" required>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">班级</label>
+                                <select class="form-select" id="classId"></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">密码</label>
+                                <input type="password" class="form-control" id="password" placeholder="默认123456">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">电话</label>
+                                <input type="text" class="form-control" id="phone">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">邮箱</label>
+                                <input type="email" class="form-control" id="email">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveStudent()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/webjars/jquery/3.7.1/jquery.min.js}"></script>
+    <script th:src="@{/webjars/bootstrap/5.3.2/js/bootstrap.bundle.min.js}"></script>
+    <script>
+        let studentModal;
+
+        $(document).ready(function() {
+            studentModal = new bootstrap.Modal(document.getElementById('studentModal'));
+            loadClasses();
+            loadStudents();
+
+            $('#studentModal').on('hidden.bs.modal', function() {
+                $('#studentForm')[0].reset();
+                $('#studentId').val('');
+            });
+        });
+
+        function loadClasses() {
+            $.get('/api/classes', function(data) {
+                if (data.code === 200) {
+                    var options = '<option value="">选择班级</option>';
+                    data.data.forEach(function(c) {
+                        options += '<option value="' + c.id + '">' + c.className + '</option>';
+                    });
+                    $('#searchClass, #classId').html(options);
+                }
+            });
+        }
+
+        function loadStudents() {
+            $.get('/api/students', function(data) {
+                if (data.code === 200) {
+                    renderStudents(data.data);
+                }
+            });
+        }
+
+        function renderStudents(students) {
+            if (!students || students.length === 0) {
+                $('#studentsTable').html('<tr><td colspan="7" class="text-center text-muted">暂无数据</td></tr>');
+                return;
+            }
+            var html = '';
+            students.forEach(function(s) {
+                var faceStatus = s.faceCount > 0
+                    ? '<span class="face-badge">' + s.faceCount + ' 张</span>'
+                    : '<span class="face-badge none">未注册</span>';
+                html += '<tr>' +
+                    '<td>' + s.studentCode + '</td>' +
+                    '<td>' + s.name + '</td>' +
+                    '<td>' + (s.className || '-') + '</td>' +
+                    '<td>' + (s.phone || '-') + '</td>' +
+                    '<td>' + (s.email || '-') + '</td>' +
+                    '<td>' + faceStatus + '</td>' +
+                    '<td>' +
+                    '<button class="btn btn-sm btn-primary me-1" onclick="editStudent(' + s.id + ')"><i class="fas fa-edit"></i></button>' +
+                    '<button class="btn btn-sm btn-danger me-1" onclick="deleteStudent(' + s.id + ')"><i class="fas fa-trash"></i></button>' +
+                    '<button class="btn btn-sm btn-success" onclick="registerFace(' + s.id + ', \'' + s.studentCode + '\')"><i class="fas fa-camera"></i></button>' +
+                    '</td></tr>';
+            });
+            $('#studentsTable').html(html);
+        }
+
+        function searchStudents() {
+            var name = $('#searchName').val();
+            var code = $('#searchCode').val();
+            var classId = $('#searchClass').val();
+
+            $.get('/api/students', function(data) {
+                if (data.code === 200) {
+                    var filtered = data.data;
+                    if (name) filtered = filtered.filter(s => s.name.includes(name));
+                    if (code) filtered = filtered.filter(s => s.studentCode.includes(code));
+                    if (classId) filtered = filtered.filter(s => s.classId == classId);
+                    renderStudents(filtered);
+                }
+            });
+        }
+
+        function showAddModal() {
+            $('#modalTitle').text('新增学生');
+            $('#studentForm')[0].reset();
+            $('#studentId').val('');
+            studentModal.show();
+        }
+
+        function editStudent(id) {
+            $('#modalTitle').text('编辑学生');
+            $.get('/api/students/' + id, function(data) {
+                if (data.code === 200) {
+                    var s = data.data;
+                    $('#studentId').val(s.id);
+                    $('#studentCode').val(s.studentCode);
+                    $('#name').val(s.name);
+                    $('#classId').val(s.classId || '');
+                    $('#phone').val(s.phone || '');
+                    $('#email').val(s.email || '');
+                    studentModal.show();
+                }
+            });
+        }
+
+        function saveStudent() {
+            var id = $('#studentId').val();
+            var student = {
+                studentCode: $('#studentCode').val(),
+                name: $('#name').val(),
+                classId: $('#classId').val() || null,
+                password: $('#password').val() || '123456',
+                phone: $('#phone').val(),
+                email: $('#email').val()
+            };
+
+            var url = id ? '/api/students/' + id : '/api/students';
+            var method = id ? 'PUT' : 'POST';
+
+            $.ajax({
+                url: url,
+                type: method,
+                contentType: 'application/json',
+                data: JSON.stringify(student),
+                success: function(data) {
+                    if (data.code === 200) {
+                        studentModal.hide();
+                        loadStudents();
+                        alert('保存成功');
+                    } else {
+                        alert(data.message || '保存失败');
+                    }
+                }
+            });
+        }
+
+        function deleteStudent(id) {
+            if (!confirm('确定要删除该学生吗？')) return;
+            $.ajax({
+                url: '/api/students/' + id,
+                type: 'DELETE',
+                success: function(data) {
+                    if (data.code === 200) {
+                        loadStudents();
+                        alert('删除成功');
+                    } else {
+                        alert(data.message || '删除失败');
+                    }
+                }
+            });
+        }
+
+        function registerFace(id, studentCode) {
+            window.location.href = '/face/capture?studentId=' + id + '&studentCode=' + studentCode;
+        }
+    </script>
+</body>
+</html>
