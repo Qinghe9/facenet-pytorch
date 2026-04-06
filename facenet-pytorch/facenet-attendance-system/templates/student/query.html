@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生端 - 人脸识别考勤系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #f5f6fa; }
+        .sidebar {
+            background: #1a1a2e;
+            min-height: 100vh;
+            position: fixed;
+            width: 250px;
+            padding-top: 20px;
+        }
+        .sidebar .nav-link {
+            color: #a0a0a0;
+            padding: 15px 25px;
+            border-radius: 0;
+        }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background: #16213e;
+            color: #fff;
+        }
+        .content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+        .card { border: none; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="text-center text-white mb-4">
+            <h4>人脸考勤系统</h4>
+            <small>学生端</small>
+        </div>
+        <ul class="nav flex-column">
+            <li class="nav-item"><a class="nav-link active" href="/student/query"><i class="fas fa-search"></i> 考勤查询</a></li>
+            <li class="nav-item"><a class="nav-link" href="/student/face/capture"><i class="fas fa-camera"></i> 人脸采集</a></li>
+            <li class="nav-item"><a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i> 退出</a></li>
+        </ul>
+    </nav>
+
+    <div class="content">
+        <div class="container-fluid">
+            <h3 class="mb-4">考勤查询 - {{ student_name }}</h3>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">选择课程</label>
+                            <select class="form-select" id="courseSelect">
+                                <option value="">全部课程</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">开始日期</label>
+                            <input type="date" class="form-control" id="startDate">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">结束日期</label>
+                            <input type="date" class="form-control" id="endDate">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-primary w-100" onclick="loadAttendance()">
+                                <i class="fas fa-search"></i> 查询
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">考勤记录</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>课程名称</th>
+                                    <th>签到时间</th>
+                                    <th>签到方式</th>
+                                    <th>考勤状态</th>
+                                    <th>置信度</th>
+                                    <th>备注</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceTable">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">请查询考勤记录</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            loadCourses();
+        });
+
+        function loadCourses() {
+            $.get('/api/student/courses', function(res) {
+                if (res.success) {
+                    let options = '<option value="">全部课程</option>';
+                    res.data.forEach(function(course) {
+                        options += `<option value="${course.id}">${course.course_name}</option>`;
+                    });
+                    $('#courseSelect').html(options);
+                }
+            });
+        }
+
+        function loadAttendance() {
+            const courseId = $('#courseSelect').val();
+            const startDate = $('#startDate').val();
+            const endDate = $('#endDate').val();
+
+            let url = '/api/student/attendance?';
+            if (courseId) url += 'course_id=' + courseId + '&';
+            if (startDate) url += 'start_date=' + startDate + '&';
+            if (endDate) url += 'end_date=' + endDate;
+
+            $.get(url, function(res) {
+                if (res.success) {
+                    renderTable(res.data);
+                }
+            });
+        }
+
+        function renderTable(data) {
+            if (data.length === 0) {
+                $('#attendanceTable').html('<tr><td colspan="6" class="text-center text-muted">暂无记录</td></tr>');
+                return;
+            }
+
+            let html = '';
+            data.forEach(function(record) {
+                const statusClass = {
+                    'normal': 'success',
+                    'late': 'warning',
+                    'absent': 'danger',
+                    'leave': 'info'
+                }[record.status] || 'secondary';
+
+                const statusText = {
+                    'normal': '正常',
+                    'late': '迟到',
+                    'absent': '缺勤',
+                    'leave': '请假'
+                }[record.status] || record.status;
+
+                html += `
+                    <tr>
+                        <td>${record.course_name || ''}</td>
+                        <td>${record.check_in_time || ''}</td>
+                        <td>${record.check_in_type === 'camera' ? '摄像头签到' : '手动签到'}</td>
+                        <td><span class="badge bg-${statusClass}">${statusText}</span></td>
+                        <td>${record.confidence ? (record.confidence * 100).toFixed(1) + '%' : '-'}</td>
+                        <td>${record.remarks || '-'}</td>
+                    </tr>
+                `;
+            });
+            $('#attendanceTable').html(html);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>考勤报表 - 人脸识别考勤系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #f5f6fa; }
+        .sidebar {
+            background: #1a1a2e;
+            min-height: 100vh;
+            position: fixed;
+            width: 250px;
+            padding-top: 20px;
+        }
+        .sidebar .nav-link {
+            color: #a0a0a0;
+            padding: 15px 25px;
+            border-radius: 0;
+        }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background: #16213e;
+            color: #fff;
+        }
+        .content { margin-left: 250px; padding: 20px; }
+        .card { border: none; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="text-center text-white mb-4">
+            <h4>人脸考勤系统</h4>
+            <small>教师端</small>
+        </div>
+        <ul class="nav flex-column">
+            <li class="nav-item"><a class="nav-link" href="/teacher/dashboard"><i class="fas fa-home"></i> 首页</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/students"><i class="fas fa-users"></i> 学生管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/face"><i class="fas fa-user-circle"></i> 人脸管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/classes"><i class="fas fa-school"></i> 班级管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/courses"><i class="fas fa-book"></i> 课程管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/attendance"><i class="fas fa-clipboard-check"></i> 考勤记录</a></li>
+            <li class="nav-item"><a class="nav-link active" href="/teacher/reports"><i class="fas fa-chart-bar"></i> 考勤报表</a></li>
+            <li class="nav-item"><a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i> 退出</a></li>
+        </ul>
+    </nav>
+
+    <div class="content">
+        <div class="container-fluid">
+            <h3 class="mb-4">考勤报表</h3>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">选择课程</label>
+                            <select class="form-select" id="courseSelect">
+                                <option value="">请选择课程</option>
+                                {% for c in courses %}
+                                <option value="{{ c.id }}">{{ c.course_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">开始日期</label>
+                            <input type="date" class="form-control" id="startDate">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">结束日期</label>
+                            <input type="date" class="form-control" id="endDate">
+                        </div>
+                        <div class="col-md-5 d-flex align-items-end gap-2">
+                            <button class="btn btn-primary" onclick="loadStatistics()">
+                                <i class="fas fa-chart-bar"></i> 查看统计
+                            </button>
+                            <button class="btn btn-success" onclick="exportRecords()">
+                                <i class="fas fa-file-excel"></i> 导出记录
+                            </button>
+                            <button class="btn btn-info" onclick="exportStatistics()">
+                                <i class="fas fa-download"></i> 导出统计
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 统计卡片 -->
+            <div class="row mb-4" id="statsCards" style="display: none;">
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-primary" id="totalCount">0</h3>
+                            <p class="mb-0">总考勤次数</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-success" id="normalCount">0</h3>
+                            <p class="mb-0">正常</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-warning" id="lateCount">0</h3>
+                            <p class="mb-0">迟到</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-danger" id="absentCount">0</h3>
+                            <p class="mb-0">缺勤</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">学生考勤统计</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>学号</th>
+                                    <th>姓名</th>
+                                    <th>正常次数</th>
+                                    <th>迟到次数</th>
+                                    <th>缺勤次数</th>
+                                    <th>请假次数</th>
+                                    <th>出勤率</th>
+                                </tr>
+                            </thead>
+                            <tbody id="statsTable">
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">请先选择课程查看统计</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function loadStatistics() {
+            const courseId = $('#courseSelect').val();
+            if (!courseId) {
+                alert('请选择课程');
+                return;
+            }
+
+            const startDate = $('#startDate').val();
+            const endDate = $('#endDate').val();
+
+            let url = '/api/attendance/statistics?course_id=' + courseId;
+            if (startDate) url += '&start_date=' + startDate;
+            if (endDate) url += '&end_date=' + endDate;
+
+            $.get(url, function(res) {
+                if (res.success) {
+                    renderStatistics(res.data);
+                }
+            });
+
+            // 加载总考勤统计
+            $.get('/api/attendance?course_id=' + courseId + (startDate ? '&start_date=' + startDate : '') + (endDate ? '&end_date=' + endDate : ''), function(res) {
+                if (res.success) {
+                    let total = res.data.length;
+                    let normal = res.data.filter(r => r.status === 'normal').length;
+                    let late = res.data.filter(r => r.status === 'late').length;
+                    let absent = res.data.filter(r => r.status === 'absent').length;
+
+                    $('#totalCount').text(total);
+                    $('#normalCount').text(normal);
+                    $('#lateCount').text(late);
+                    $('#absentCount').text(absent);
+                    $('#statsCards').show();
+                }
+            });
+        }
+
+        function renderStatistics(data) {
+            if (data.length === 0) {
+                $('#statsTable').html('<tr><td colspan="7" class="text-center text-muted">暂无数据</td></tr>');
+                return;
+            }
+
+            let html = '';
+            data.forEach(function(s) {
+                html += `
+                    <tr>
+                        <td>${s.student_code}</td>
+                        <td>${s.student_name}</td>
+                        <td>${s.normal || 0}</td>
+                        <td>${s.late || 0}</td>
+                        <td>${s.absent || 0}</td>
+                        <td>${s.leave || 0}</td>
+                        <td>
+                            <span class="badge ${s.attendance_rate >= 80 ? 'bg-success' : s.attendance_rate >= 60 ? 'bg-warning' : 'bg-danger'}">
+                                ${(s.attendance_rate || 0).toFixed(1)}%
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            });
+            $('#statsTable').html(html);
+        }
+
+        function exportRecords() {
+            const courseId = $('#courseSelect').val();
+            if (!courseId) {
+                alert('请选择课程');
+                return;
+            }
+
+            const startDate = $('#startDate').val();
+            const endDate = $('#endDate').val();
+
+            let url = '/api/attendance/export?course_id=' + courseId + '&type=records';
+            if (startDate) url += '&start_date=' + startDate;
+            if (endDate) url += '&end_date=' + endDate;
+
+            window.location.href = url;
+        }
+
+        function exportStatistics() {
+            const courseId = $('#courseSelect').val();
+            if (!courseId) {
+                alert('请选择课程');
+                return;
+            }
+
+            const startDate = $('#startDate').val();
+            const endDate = $('#endDate').val();
+
+            let url = '/api/attendance/export?course_id=' + courseId + '&type=statistics';
+            if (startDate) url += '&start_date=' + startDate;
+            if (endDate) url += '&end_date=' + endDate;
+
+            window.location.href = url;
+        }
+    </script>
+</body>
+</html>

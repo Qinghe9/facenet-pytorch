@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>考勤记录 - 人脸识别考勤系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #f5f6fa; }
+        .sidebar {
+            background: #1a1a2e;
+            min-height: 100vh;
+            position: fixed;
+            width: 250px;
+            padding-top: 20px;
+        }
+        .sidebar .nav-link {
+            color: #a0a0a0;
+            padding: 15px 25px;
+            border-radius: 0;
+        }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background: #16213e;
+            color: #fff;
+        }
+        .content { margin-left: 250px; padding: 20px; }
+        .card { border: none; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="text-center text-white mb-4">
+            <h4>人脸考勤系统</h4>
+            <small>教师端</small>
+        </div>
+        <ul class="nav flex-column">
+            <li class="nav-item"><a class="nav-link" href="/teacher/dashboard"><i class="fas fa-home"></i> 首页</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/students"><i class="fas fa-users"></i> 学生管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/face"><i class="fas fa-user-circle"></i> 人脸管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/classes"><i class="fas fa-school"></i> 班级管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/courses"><i class="fas fa-book"></i> 课程管理</a></li>
+            <li class="nav-item"><a class="nav-link active" href="/teacher/attendance"><i class="fas fa-clipboard-check"></i> 考勤记录</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/reports"><i class="fas fa-chart-bar"></i> 考勤报表</a></li>
+            <li class="nav-item"><a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i> 退出</a></li>
+        </ul>
+    </nav>
+
+    <div class="content">
+        <div class="container-fluid">
+            <h3 class="mb-4">考勤记录</h3>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">选择课程</label>
+                            <select class="form-select" id="courseSelect">
+                                <option value="">全部课程</option>
+                                {% for c in courses %}
+                                <option value="{{ c.id }}">{{ c.course_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">开始日期</label>
+                            <input type="date" class="form-control" id="startDate">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">结束日期</label>
+                            <input type="date" class="form-control" id="endDate">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">状态</label>
+                            <select class="form-select" id="statusFilter">
+                                <option value="">全部</option>
+                                <option value="normal">正常</option>
+                                <option value="late">迟到</option>
+                                <option value="absent">缺勤</option>
+                                <option value="leave">请假</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button class="btn btn-primary me-2" onclick="loadAttendance()">
+                                <i class="fas fa-search"></i> 查询
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>学号</th>
+                                    <th>姓名</th>
+                                    <th>课程</th>
+                                    <th>签到时间</th>
+                                    <th>签到方式</th>
+                                    <th>状态</th>
+                                    <th>置信度</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceTable">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">请查询考勤记录</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function loadAttendance() {
+            const courseId = $('#courseSelect').val();
+            const startDate = $('#startDate').val();
+            const endDate = $('#endDate').val();
+            const status = $('#statusFilter').val();
+
+            let url = '/api/attendance?';
+            if (courseId) url += 'course_id=' + courseId + '&';
+            if (startDate) url += 'start_date=' + startDate + '&';
+            if (endDate) url += 'end_date=' + endDate + '&';
+            if (status) url += 'status=' + status;
+
+            $.get(url, function(res) {
+                if (res.success) {
+                    renderTable(res.data);
+                }
+            });
+        }
+
+        function renderTable(data) {
+            if (data.length === 0) {
+                $('#attendanceTable').html('<tr><td colspan="8" class="text-center text-muted">暂无记录</td></tr>');
+                return;
+            }
+
+            let html = '';
+            data.forEach(function(record) {
+                const statusMap = {
+                    'normal': ['success', '正常'],
+                    'late': ['warning', '迟到'],
+                    'absent': ['danger', '缺勤'],
+                    'leave': ['info', '请假']
+                };
+                const [cls, text] = statusMap[record.status] || ['secondary', record.status];
+
+                html += `
+                    <tr>
+                        <td>${record.student_code || ''}</td>
+                        <td>${record.student_name || ''}</td>
+                        <td>${record.course_name || ''}</td>
+                        <td>${record.check_in_time || ''}</td>
+                        <td>${record.check_in_type === 'camera' ? '摄像头' : '手动'}</td>
+                        <td><span class="badge bg-${cls}">${text}</span></td>
+                        <td>${record.confidence ? (record.confidence * 100).toFixed(1) + '%' : '-'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="editStatus(${record.id}, '${record.status}')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            $('#attendanceTable').html(html);
+        }
+
+        function editStatus(id, currentStatus) {
+            const newStatus = prompt('请输入新的考勤状态:\nnormal-正常, late-迟到, absent-缺勤, leave-请假', currentStatus);
+            if (!newStatus || newStatus === currentStatus) return;
+
+            $.ajax({
+                url: '/api/attendance/' + id,
+                method: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({ status: newStatus }),
+                success: function(res) {
+                    if (res.success) {
+                        loadAttendance();
+                    } else {
+                        alert(res.message);
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

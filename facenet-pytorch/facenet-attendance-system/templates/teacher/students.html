@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生管理 - 人脸识别考勤系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #f5f6fa; }
+        .sidebar {
+            background: #1a1a2e;
+            min-height: 100vh;
+            position: fixed;
+            width: 250px;
+            padding-top: 20px;
+        }
+        .sidebar .nav-link {
+            color: #a0a0a0;
+            padding: 15px 25px;
+            border-radius: 0;
+        }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background: #16213e;
+            color: #fff;
+        }
+        .content { margin-left: 250px; padding: 20px; }
+        .card { border: none; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="text-center text-white mb-4">
+            <h4>人脸考勤系统</h4>
+            <small>教师端</small>
+        </div>
+        <ul class="nav flex-column">
+            <li class="nav-item"><a class="nav-link" href="/teacher/dashboard"><i class="fas fa-home"></i> 首页</a></li>
+            <li class="nav-item"><a class="nav-link active" href="/teacher/students"><i class="fas fa-users"></i> 学生管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/face"><i class="fas fa-user-circle"></i> 人脸管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/classes"><i class="fas fa-school"></i> 班级管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/courses"><i class="fas fa-book"></i> 课程管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/attendance"><i class="fas fa-clipboard-check"></i> 考勤记录</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/reports"><i class="fas fa-chart-bar"></i> 考勤报表</a></li>
+            <li class="nav-item"><a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i> 退出</a></li>
+        </ul>
+    </nav>
+
+    <div class="content">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3>学生管理</h3>
+                <button class="btn btn-primary" onclick="showAddModal()">
+                    <i class="fas fa-plus"></i> 添加学生
+                </button>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <select class="form-select" id="classFilter" onchange="loadStudents()">
+                                <option value="">全部班级</option>
+                                {% for c in classes %}
+                                <option value="{{ c.id }}" {% if c.id == current_class_id %}selected{% endif %}>{{ c.class_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="searchInput" placeholder="搜索学号或姓名" value="{{ search }}">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-secondary w-100" onclick="loadStudents()">
+                                <i class="fas fa-search"></i> 搜索
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>学号</th>
+                                    <th>姓名</th>
+                                    <th>班级</th>
+                                    <th>人脸状态</th>
+                                    <th>注册人脸数</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentTable">
+                                {% for s in students %}
+                                <tr>
+                                    <td>{{ s.student_code }}</td>
+                                    <td>{{ s.name }}</td>
+                                    <td>{{ s.class_info.class_name if s.class_info else '-' }}</td>
+                                    <td>
+                                        {% if s.face_count > 0 %}
+                                        <span class="badge bg-success">已注册</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">未注册</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ s.face_count }}</td>
+                                    <td>
+                                        {% if s.status == 1 %}
+                                        <span class="badge bg-success">正常</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">禁用</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info" onclick="registerFace({{ s.id }}, '{{ s.name }}')">
+                                            <i class="fas fa-camera"></i> 人脸
+                                        </button>
+                                        <button class="btn btn-sm btn-primary" onclick="editStudent({{ s.id }})">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteStudent({{ s.id }})">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加/编辑学生 Modal -->
+    <div class="modal fade" id="studentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">添加学生</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="studentForm">
+                        <input type="hidden" id="studentId">
+                        <div class="mb-3">
+                            <label class="form-label">学号</label>
+                            <input type="text" class="form-control" id="studentCode" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">姓名</label>
+                            <input type="text" class="form-control" id="studentName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">班级</label>
+                            <select class="form-select" id="studentClass">
+                                <option value="">请选择</option>
+                                {% for c in classes %}
+                                <option value="{{ c.id }}">{{ c.class_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">密码 (默认123456)</label>
+                            <input type="password" class="form-control" id="studentPassword">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveStudent()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let modal;
+
+        function loadStudents() {
+            // 重新加载页面以应用筛选
+            const classId = $('#classFilter').val();
+            const search = $('#searchInput').val();
+            let url = '/teacher/students?';
+            if (classId) url += 'class_id=' + classId + '&';
+            if (search) url += 'search=' + encodeURIComponent(search);
+            window.location.href = url;
+        }
+
+        function showAddModal() {
+            $('#modalTitle').text('添加学生');
+            $('#studentId').val('');
+            $('#studentCode').val('').prop('disabled', false);
+            $('#studentName').val('');
+            $('#studentClass').val('');
+            $('#studentPassword').val('');
+            modal = new bootstrap.Modal($('#studentModal'));
+            modal.show();
+        }
+
+        function editStudent(id) {
+            $.get('/api/students/' + id, function(res) {
+                if (res.success) {
+                    const s = res.data;
+                    $('#modalTitle').text('编辑学生');
+                    $('#studentId').val(s.id);
+                    $('#studentCode').val(s.student_code).prop('disabled', true);
+                    $('#studentName').val(s.name);
+                    $('#studentClass').val(s.class_id || '');
+                    $('#studentPassword').val('');
+                    modal = new bootstrap.Modal($('#studentModal'));
+                    modal.show();
+                }
+            });
+        }
+
+        function saveStudent() {
+            const id = $('#studentId').val();
+            const data = {
+                student_code: $('#studentCode').val(),
+                name: $('#studentName').val(),
+                class_id: $('#studentClass').val() || null,
+            };
+            const password = $('#studentPassword').val();
+            if (password) data.password = password;
+
+            const url = id ? '/api/students/' + id : '/api/students';
+            const method = id ? 'PUT' : 'POST';
+
+            $.ajax({
+                url: url,
+                method: method,
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(res) {
+                    if (res.success) {
+                        modal.hide();
+                        location.reload();
+                    } else {
+                        alert(res.message);
+                    }
+                }
+            });
+        }
+
+        function deleteStudent(id) {
+            if (!confirm('确定要删除该学生吗？')) return;
+            $.ajax({
+                url: '/api/students/' + id,
+                method: 'DELETE',
+                success: function(res) {
+                    if (res.success) {
+                        location.reload();
+                    } else {
+                        alert(res.message);
+                    }
+                }
+            });
+        }
+
+        function registerFace(studentId, studentName) {
+            if (confirm('是否为 ' + studentName + ' 进行人脸注册？')) {
+                window.location.href = '/teacher/face/capture/' + studentId;
+            }
+        }
+    </script>
+</body>
+</html>

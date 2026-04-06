@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课程管理 - 人脸识别考勤系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #f5f6fa; }
+        .sidebar {
+            background: #1a1a2e;
+            min-height: 100vh;
+            position: fixed;
+            width: 250px;
+            padding-top: 20px;
+        }
+        .sidebar .nav-link {
+            color: #a0a0a0;
+            padding: 15px 25px;
+            border-radius: 0;
+        }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background: #16213e;
+            color: #fff;
+        }
+        .content { margin-left: 250px; padding: 20px; }
+        .card { border: none; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="text-center text-white mb-4">
+            <h4>人脸考勤系统</h4>
+            <small>教师端</small>
+        </div>
+        <ul class="nav flex-column">
+            <li class="nav-item"><a class="nav-link" href="/teacher/dashboard"><i class="fas fa-home"></i> 首页</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/students"><i class="fas fa-users"></i> 学生管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/face"><i class="fas fa-user-circle"></i> 人脸管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/classes"><i class="fas fa-school"></i> 班级管理</a></li>
+            <li class="nav-item"><a class="nav-link active" href="/teacher/courses"><i class="fas fa-book"></i> 课程管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/attendance"><i class="fas fa-clipboard-check"></i> 考勤记录</a></li>
+            <li class="nav-item"><a class="nav-link" href="/teacher/reports"><i class="fas fa-chart-bar"></i> 考勤报表</a></li>
+            <li class="nav-item"><a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i> 退出</a></li>
+        </ul>
+    </nav>
+
+    <div class="content">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3>课程管理</h3>
+                <button class="btn btn-primary" onclick="showAddModal()">
+                    <i class="fas fa-plus"></i> 添加课程
+                </button>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>课程代码</th>
+                                    <th>课程名称</th>
+                                    <th>班级</th>
+                                    <th>上课时间</th>
+                                    <th>上课地点</th>
+                                    <th>学期</th>
+                                    <th>学生数</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for c in courses %}
+                                <tr>
+                                    <td>{{ c.course_code }}</td>
+                                    <td>{{ c.course_name }}</td>
+                                    <td>{{ c.class_info.class_name if c.class_info else '-' }}</td>
+                                    <td>
+                                        {% if c.week_day %}
+                                        周{{ ['一','二','三','四','五','六','日'][c.week_day - 1] }}
+                                        {{ c.start_time.strftime('%H:%M') if c.start_time else '' }}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ c.location or '-' }}</td>
+                                    <td>{{ c.semester or '-' }}</td>
+                                    <td>{{ c.student_count }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" onclick="editCourse({{ c.id }})">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteCourse({{ c.id }})">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="courseModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">添加课程</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="courseForm">
+                        <input type="hidden" id="courseId">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">课程代码</label>
+                                <input type="text" class="form-control" id="courseCode" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">课程名称</label>
+                                <input type="text" class="form-control" id="courseName" required>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">班级</label>
+                                <select class="form-select" id="courseClass">
+                                    <option value="">不指定班级</option>
+                                    {% for c in classes %}
+                                    <option value="{{ c.id }}">{{ c.class_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">学期</label>
+                                <input type="text" class="form-control" id="semester" placeholder="如: 2024-1">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">星期</label>
+                                <select class="form-select" id="weekDay">
+                                    <option value="">不设置</option>
+                                    <option value="1">周一</option>
+                                    <option value="2">周二</option>
+                                    <option value="3">周三</option>
+                                    <option value="4">周四</option>
+                                    <option value="5">周五</option>
+                                    <option value="6">周六</option>
+                                    <option value="7">周日</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">上课时间</label>
+                                <input type="time" class="form-control" id="startTime">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">下课时间</label>
+                                <input type="time" class="form-control" id="endTime">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">上课地点</label>
+                            <input type="text" class="form-control" id="location" placeholder="如: 教学楼A101">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveCourse()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let modal;
+
+        function showAddModal() {
+            $('#modalTitle').text('添加课程');
+            $('#courseId').val('');
+            $('#courseCode').val('').prop('disabled', false);
+            $('#courseName').val('');
+            $('#courseClass').val('');
+            $('#semester').val('');
+            $('#weekDay').val('');
+            $('#startTime').val('');
+            $('#endTime').val('');
+            $('#location').val('');
+            modal = new bootstrap.Modal($('#courseModal'));
+            modal.show();
+        }
+
+        function editCourse(id) {
+            // 简化版本，实际应从API获取
+            alert('编辑功能开发中');
+        }
+
+        function saveCourse() {
+            const data = {
+                course_code: $('#courseCode').val(),
+                course_name: $('#courseName').val(),
+                class_id: $('#courseClass').val() || null,
+                semester: $('#semester').val(),
+                week_day: $('#weekDay').val() ? parseInt($('#weekDay').val()) : null,
+                start_time: $('#startTime').val(),
+                end_time: $('#endTime').val(),
+                location: $('#location').val()
+            };
+
+            $.ajax({
+                url: '/api/courses',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(res) {
+                    if (res.success) {
+                        modal.hide();
+                        location.reload();
+                    } else {
+                        alert(res.message);
+                    }
+                }
+            });
+        }
+
+        function deleteCourse(id) {
+            if (!confirm('确定要删除该课程吗？')) return;
+            $.ajax({
+                url: '/api/courses/' + id,
+                method: 'DELETE',
+                success: function(res) {
+                    if (res.success) {
+                        location.reload();
+                    } else {
+                        alert(res.message);
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
